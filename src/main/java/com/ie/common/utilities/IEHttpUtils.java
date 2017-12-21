@@ -1,5 +1,6 @@
 package com.ie.common.utilities;
 
+import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
@@ -101,9 +102,8 @@ public class IEHttpUtils {
             try (CloseableHttpResponse response = client.execute(httpGet)) {
                 return handleResponse(response, isSkipReadEntity);
             }
-        } catch (IOException e){
-            e.printStackTrace();
-            return new IEHttpEntity(-1, "Fail to send : " + e.getMessage());
+        } catch (Exception e){
+            return new IEHttpEntity(e);
         }
     }
 
@@ -150,9 +150,8 @@ public class IEHttpUtils {
             try (CloseableHttpResponse response = client.execute(httpPost)) {
                 return handleResponse(response, false);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new IEHttpEntity(-1, "Fail to send : " + e.getMessage());
+        } catch (Exception e) {
+            return new IEHttpEntity(e);
         }
     }
 
@@ -176,9 +175,8 @@ public class IEHttpUtils {
             try (CloseableHttpResponse response = client.execute(httpPost)) {
                 return handleResponse(response, false);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new IEHttpEntity(-1, "Fail to send : " + e.getMessage());
+        } catch (Exception e) {
+            return new IEHttpEntity(e);
         }
     }
 
@@ -198,7 +196,6 @@ public class IEHttpUtils {
         OutputStream os = null;
         InputStream is = null;
         BufferedReader br = null;
-        IEHttpEntity result = new IEHttpEntity(-1, "Unknown");
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setDoOutput(true);
@@ -213,14 +210,13 @@ public class IEHttpUtils {
                 }
             }
             conn.setRequestProperty("Content-Type", ContentType.form_file + "; boundary=" + BOUNDARY);
-//			conn.setRequestProperty("Accept", "application/json;charset=UTF-8");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36");
             conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
             conn.setConnectTimeout(connectTimeoutSecond * 1000);
             conn.setReadTimeout(readTimeoutSecond * 1000);
             os = conn.getOutputStream();
 
-            StringBuilder content = null;
+            StringBuilder content;
 
             if (postParams != null && postParams.size() > 0) {
                 content = new StringBuilder();
@@ -259,7 +255,7 @@ public class IEHttpUtils {
 
                     // real write stream to server
                     byte[] b = new byte[1024 * 1024];
-                    int len = -1;
+                    int len;
                     while ((len = file.getStream().read(b)) != -1) {
                         os.write(b, 0, len);
                     }
@@ -269,23 +265,18 @@ public class IEHttpUtils {
             os.flush();
 
             is = conn.getInputStream();
-            result.setStatus(conn.getResponseCode());
             br = new BufferedReader(new InputStreamReader(is));
             StringBuilder sb = new StringBuilder();
-            String line = null;
+            String line;
             while ((line = br.readLine()) != null) {
                 sb.append(line).append("\n");
             }
             if (sb.length() > 0) {
                 sb.deleteCharAt(sb.length() - 1);
             }
-            result.setResponse(sb.toString());
-
-        } catch (UnsupportedEncodingException e) {
+            return new IEHttpEntity(conn.getResponseCode(), sb.toString());
         } catch (Exception e) {
-            e.printStackTrace();
-            result.setStatus(-1);
-            result.setResponse(e.getMessage());
+            return new IEHttpEntity(e);
         } finally {
             if (br != null) {
                 try {
@@ -315,7 +306,6 @@ public class IEHttpUtils {
                 fileParams.forEach(IEIFileValuePair::destroyStream);
             }
         }
-        return result;
     }
 
     private static RequestConfig buildRequestConfig(final int connectTimeoutSecond, final int readTimeoutSecond) {
@@ -335,7 +325,7 @@ public class IEHttpUtils {
 
     private static IEHttpEntity handleResponse(final CloseableHttpResponse response, final boolean isSkipEntity) {
         if (isSkipEntity) {
-            return new IEHttpEntity(response.getStatusLine().getStatusCode());
+            return new IEHttpEntity(response.getStatusLine().getStatusCode(), null);
         }else{
             return readContentFromResponse(response);
         }
@@ -343,11 +333,10 @@ public class IEHttpUtils {
 
     private static IEHttpEntity readContentFromResponse(final CloseableHttpResponse response) {
         IEHttpEntity result = new IEHttpEntity(response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-
         if (response.getEntity() != null ) {
-            try (BufferedReader r1 = new BufferedReader(new InputStreamReader(response.getEntity().getContent(), DEFAULT_CHARSET));) {
+            try (BufferedReader r1 = new BufferedReader(new InputStreamReader(response.getEntity().getContent(), DEFAULT_CHARSET))) {
                 StringBuilder sb = new StringBuilder();
-                String line = null;
+                String line ;
                 while ((line = r1.readLine()) != null) {
                     sb.append(line).append("\n");
                 }
@@ -355,11 +344,8 @@ public class IEHttpUtils {
                     sb.deleteCharAt(sb.length() - 1);
                     result.setResponse(sb.toString());
                 }
-            } catch (UnsupportedEncodingException e) {
             } catch (IOException e) {
-                e.printStackTrace();
-                result.setStatus(-1);
-                result.setResponse("Fail to read response content : " + e.getMessage());
+                return new IEHttpEntity(e);
             } finally {
                 try {
                     response.getEntity().getContent().close();

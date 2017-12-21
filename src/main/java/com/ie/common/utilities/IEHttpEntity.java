@@ -7,6 +7,8 @@ package com.ie.common.utilities;
  */
 public class IEHttpEntity {
 
+    public static final int error_code = -1;
+
     /**
      * http response status
      */
@@ -17,16 +19,19 @@ public class IEHttpEntity {
      */
     private String response;
 
-    private IEHttpEntity() {
-    }
-
-    public IEHttpEntity(int status) {
-        this.status = status;
-    }
+    /**
+     * request failed, status = -1
+     */
+    private Throwable error;
 
     public IEHttpEntity(int status, String response) {
         this.status = status;
         this.response = response;
+    }
+
+    public IEHttpEntity(Throwable error){
+        this.status = error_code;
+        this.error = error;
     }
 
     public int getStatus() {
@@ -43,6 +48,14 @@ public class IEHttpEntity {
 
     public void setResponse(String response) {
         this.response = response;
+    }
+
+    public Throwable getError() {
+        return error;
+    }
+
+    public void setError(Throwable error) {
+        this.error = error;
     }
 
     @Override
